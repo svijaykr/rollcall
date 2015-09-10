@@ -1,7 +1,15 @@
 import sys 
 import urllib2
+import logging
+import time
+import multiprocessing
+from datetime import datetime
+
 
 def fetch_list(file_name):
+    logging.basicConfig(filename=file_name + '_log.txt',level=logging.DEBUG)
+    logging.info('Starting run at ' + str(datetime.now()))
+    start_time = time.time()
     f = open(file_name)
     for line in f:
         line = line.strip('\n')
@@ -9,9 +17,10 @@ def fetch_list(file_name):
         if contents is not None:
             file_name = make_output_file_name(line)
             write_single_file(file_name, contents)
-            print line, ": DONE"
+            elapsed_time = time.time() - start_time
+            logging.info(file_name + ': DONE ' + str(datetime.now()) + 'took ' + str(elapsed_time) + 'ms')
         else:
-            print line, ": FAILED"
+            logging.info(file_name + ': FAILED ' + str(datetime.now()) + 'took ' + str(elapsed_time) + 'ms')
     f.close()
 
 def fetch_single_file(url):
@@ -65,14 +74,25 @@ def apportion():
     lines = read_master_file(sys.argv[1])
     noOfProcesses = int(sys.argv[2])
     chunks = make_chunk(lines, len(lines),noOfProcesses)
-    out_file_list = []
+    outFileList = []
     for i,chunk in enumerate(chunks):
         out_file_name = 'tmp_chunk'+ str(i) + '.txt'
         write_chunk(chunk,out_file_name)
-        out_file_list.append(out_file_name)
-    return out_file_list
+        outFileList.append(out_file_name)
+    return outFileList
 
 
 if __name__ == '__main__':
-    out_file_list = apportion()
-    fetch_list(out_file_list[0])
+    outFileList = apportion()
+    noOfProc = len(outFileList) 
+    jobs = []
+    for i in range(noOfProc):
+        fetchFileForJob = outFileList[i]
+        print fetchFileForJob
+        p = multiprocessing.Process(target=fetch_list, args=(fetchFileForJob,))
+        p.daemon = True
+        jobs.append(p)
+        p.start()
+
+    for p in jobs:
+        p.join()
